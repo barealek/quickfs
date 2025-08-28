@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+   <meta charset="UTF-8">
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+   <title>Download - QuickFS</title>
+   <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+   <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+</head>
+<body>
+   <!-- Hero Section -->
+   <div class="py-8 bg-white dark:bg-gray-950 sm:py-12">
+     <div class="max-w-4xl mx-auto sm:px-6 lg:px-8">
+       <div class="relative px-6 py-12 overflow-hidden bg-gray-900 shadow-2xl isolate sm:rounded-3xl sm:px-16 xl:py-16">
+
+         <!-- File Info Header -->
+         <div class="mb-8 text-center">
+           <div class="flex items-center justify-center mx-auto mb-3 size-12 rounded-xl bg-white/10 backdrop-blur">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true" class="text-white size-6">
+               <path stroke-linecap="round" stroke-linejoin="round" d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/>
+               <path stroke-linecap="round" stroke-linejoin="round" d="M14 2v4a2 2 0 0 0 2 2h4"/>
+               <circle cx="10" cy="12" r="2"/>
+               <path stroke-linecap="round" stroke-linejoin="round" d="m20 17-1.296-1.296a2.41 2.41 0 0 0-3.408 0L9 22"/>
+             </svg>
+           </div>
+           <h1 class="text-2xl font-semibold tracking-tight text-white sm:text-3xl">billede.png</h1>
+           <p class="mt-2 text-sm text-gray-300">Klar til afsendelse • 2.4 MB</p>
+         </div>
+
+         <!-- QR Code Section -->
+         <div class="flex justify-center mb-8">
+           <div class="relative p-4 border shadow-xl bg-white/10 backdrop-blur border-white/20 rounded-2xl">
+             <div id="qrcode" class="flex items-center justify-center mb-3"></div>
+             <div class="text-center">
+               <p class="mb-1 text-xs text-gray-300">Scan med din telefon</p>
+               <p class="text-xs text-gray-400">eller del linket</p>
+             </div>
+           </div>
+         </div>
+
+         <!-- Connected Devices Section -->
+         <div class="max-w-2xl mx-auto">
+           <div class="p-4 border bg-white/5 backdrop-blur border-white/10 rounded-xl">
+             <h3 class="mb-4 text-sm font-semibold text-center text-white">Tilsluttede enheder <span class="font-medium text-gray-300">(2/5)</span></h3>
+             <div class="space-y-3">
+               <!-- Device 1 -->
+               <div class="p-3 border rounded-lg bg-white/5 border-white/10">
+                 <div class="flex items-center justify-between mb-3">
+                   <div class="flex items-center space-x-3">
+                     <div class="relative flex items-center justify-center border rounded-lg size-8 bg-white/10 backdrop-blur border-white/20">
+                       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-gray-300">
+                         <rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
+                         <path d="M12 18h.01"/>
+                       </svg>
+                     </div>
+                     <div>
+                       <p class="text-xs font-medium text-white">Alek Telefon</p>
+                     </div>
+                   </div>
+                   <button onclick="sendToDevice('lindsay')" class="send-btn px-3 py-1.5 text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-400/30 rounded-md hover:bg-indigo-500/30 focus:outline-none focus:ring-2 focus:ring-orange-400 dark:focus:ring-indigo-400 transition-all">
+                     <span class="flex items-center gap-1.5">
+                       <svg class="size-3" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                         <path stroke-linecap="round" stroke-linejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5"/>
+                       </svg>
+                       Send
+                     </span>
+                   </button>
+                 </div>
+                 <!-- Progress Bar -->
+                 <div class="hidden progress-container">
+                   <div class="flex items-center justify-between mb-1 text-xs text-gray-300">
+                     <span>Sender...</span>
+                     <span class="progress-text">0%</span>
+                   </div>
+                   <div class="w-full bg-white/10 rounded-full h-1.5">
+                     <div class="progress-bar bg-indigo-400 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                   </div>
+                 </div>
+               </div>
+
+             </div>
+           </div>
+         </div>
+
+         <!-- Background gradient (same as index.html) -->
+         <svg viewBox="0 0 1024 1024" aria-hidden="true" class="absolute top-1/2 left-1/2 -z-10 size-256 -translate-x-1/2 mask-[radial-gradient(closest-side,white,transparent)]">
+           <circle r="512" cx="512" cy="512" fill="url(#827591b1-ce8c-4110-b064-7cb85a0b1217)" fill-opacity="0.7" />
+           <defs>
+             <radialGradient id="827591b1-ce8c-4110-b064-7cb85a0b1217">
+               <stop stop-color="#7775D6" />
+               <stop offset="1" stop-color="#E935C1" />
+             </radialGradient>
+           </defs>
+         </svg>
+       </div>
+     </div>
+   </div>
+
+   <!-- Footer (same as index.html) -->
+   <footer class="bg-white dark:bg-gray-900">
+     <div class="px-6 py-12 mx-auto max-w-7xl md:flex md:items-center md:justify-between lg:px-8">
+       <div class="flex justify-center gap-x-6 md:order-2">
+         <a href="#" class="text-gray-600 hover:text-gray-800 dark:text-gray-400 dark:hover:text-white">
+           <span class="sr-only">GitHub</span>
+           <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" class="size-6">
+             <path d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z" clip-rule="evenodd" fill-rule="evenodd" />
+           </svg>
+         </a>
+       </div>
+       <p class="mt-8 text-center text-gray-600 text-sm/6 md:order-1 md:mt-0 dark:text-gray-400">&copy; 2024 QuickFS. Alle rettigheder forbeholdes.</p>
+     </div>
+   </footer>
+
+   <script>
+     // Create a QR Code instance with enhanced styling
+     var qrcode = new QRCode(document.getElementById("qrcode"), {
+       text: "https://example.com/download/billede.png",
+       width: 140,
+       height: 140,
+       colorDark: "#1f2937", // Dark gray for better contrast
+       colorLight: "transparent", // Transparent background to blend with backdrop
+       correctLevel: QRCode.CorrectLevel.H // High error correction
+     });
+
+     // Add styling to the generated QR code
+     setTimeout(() => {
+       const qrImg = document.querySelector('#qrcode img');
+       if (qrImg) {
+         qrImg.style.borderRadius = '12px';
+         qrImg.style.backgroundColor = '#ffffff';
+         qrImg.style.padding = '12px';
+         qrImg.style.boxShadow = '0 4px 12px -2px rgba(0, 0, 0, 0.1)';
+       }
+     }, 100);
+
+     // Device sending functionality
+     function sendToDevice(deviceId) {
+       const deviceCard = event.target.closest('.p-3');
+       const sendBtn = deviceCard.querySelector('.send-btn');
+       const progressContainer = deviceCard.querySelector('.progress-container');
+       const progressBar = deviceCard.querySelector('.progress-bar');
+       const progressText = deviceCard.querySelector('.progress-text');
+
+       // Hide send button and show progress
+       sendBtn.style.display = 'none';
+       progressContainer.classList.remove('hidden');
+
+       // Simulate file transfer progress
+       let progress = 0;
+       const interval = setInterval(() => {
+         progress += Math.random() * 15 + 5; // Random progress between 5-20%
+
+         if (progress >= 100) {
+           progress = 100;
+           clearInterval(interval);
+
+           // Show completion
+           progressText.textContent = 'Fuldført!';
+           progressBar.style.width = '100%';
+           progressBar.classList.remove('bg-indigo-400');
+           progressBar.classList.add('bg-green-400');
+
+           // Reset after 2 seconds
+           setTimeout(() => {
+             progressContainer.classList.add('hidden');
+             sendBtn.style.display = 'block';
+             progressBar.style.width = '0%';
+             progressBar.classList.remove('bg-green-400');
+             progressBar.classList.add('bg-indigo-400');
+             progressText.textContent = '0%';
+           }, 2000);
+         } else {
+           progressText.textContent = Math.round(progress) + '%';
+           progressBar.style.width = progress + '%';
+         }
+       }, 200); // Update every 200ms
+     }
+   </script></body>
+</html>
