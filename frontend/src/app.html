@@ -64,15 +64,115 @@
 		<!-- Service Worker Registration -->
 		<script>
 			if ('serviceWorker' in navigator) {
+				let swRegistration = null;
+
 				window.addEventListener('load', () => {
 					navigator.serviceWorker.register('/sw.js')
 						.then((registration) => {
 							console.log('SW registered: ', registration);
+							swRegistration = registration;
+
+							// Check for updates on page load
+							registration.update();
+
+							// Listen for updates
+							registration.addEventListener('updatefound', () => {
+								const newWorker = registration.installing;
+								newWorker.addEventListener('statechange', () => {
+									if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+										// New version available
+										showUpdateNotification();
+									}
+								});
+							});
 						})
 						.catch((registrationError) => {
 							console.log('SW registration failed: ', registrationError);
 						});
 				});
+
+				// Listen for messages from service worker
+				navigator.serviceWorker.addEventListener('message', (event) => {
+					if (event.data && event.data.type === 'UPDATE_AVAILABLE') {
+						console.log('Update available:', event.data.payload);
+						showUpdateNotification();
+					}
+				});
+
+				// Show update notification
+				function showUpdateNotification() {
+					// Create a subtle notification bar
+					const existingNotification = document.getElementById('update-notification');
+					if (existingNotification) return; // Don't show multiple notifications
+
+					const notification = document.createElement('div');
+					notification.id = 'update-notification';
+					notification.innerHTML = `
+						<div style="
+							position: fixed;
+							top: 0;
+							left: 0;
+							right: 0;
+							background: #4f46e5;
+							color: white;
+							padding: 12px 16px;
+							display: flex;
+							align-items: center;
+							justify-content: space-between;
+							z-index: 10000;
+							font-family: system-ui, -apple-system, sans-serif;
+							font-size: 14px;
+							box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+						">
+							<span>🚀 A new version of QuickFS is available!</span>
+							<div>
+								<button onclick="updateApp()" style="
+									background: white;
+									color: #4f46e5;
+									border: none;
+									padding: 6px 12px;
+									border-radius: 4px;
+									margin-right: 8px;
+									cursor: pointer;
+									font-weight: 500;
+								">Update Now</button>
+								<button onclick="dismissUpdate()" style="
+									background: transparent;
+									color: white;
+									border: 1px solid rgba(255,255,255,0.3);
+									padding: 6px 12px;
+									border-radius: 4px;
+									cursor: pointer;
+								">Later</button>
+							</div>
+						</div>
+					`;
+					document.body.appendChild(notification);
+				}
+
+				// Update app function
+				window.updateApp = function() {
+					if (swRegistration && swRegistration.waiting) {
+						swRegistration.waiting.postMessage({ type: 'SKIP_WAITING' });
+					}
+					// Reload the page to activate new version
+					window.location.reload();
+				};
+
+				// Dismiss update notification
+				window.dismissUpdate = function() {
+					const notification = document.getElementById('update-notification');
+					if (notification) {
+						notification.remove();
+					}
+				};
+
+				// Manual update check function (can be called from anywhere)
+				window.checkForUpdates = function() {
+					if (navigator.serviceWorker.controller) {
+						navigator.serviceWorker.controller.postMessage({ type: 'CHECK_FOR_UPDATES' });
+					}
+				};
 			}
 		</script>
 	</body>
