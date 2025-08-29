@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/barealek/quickfs:0.1.4
+    image: ghcr.io/barealek/quickfs:0.1.6
 
   tunnel:
     image: cloudflare/cloudflared:latest
