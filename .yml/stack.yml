@@ -1,0 +1,11 @@
+services:
+  app:
+    image: ghcr.io/barealek/quickfs:latest
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    env_file:
+      - prod.env
+    ports:
+      - "8080:8080"
