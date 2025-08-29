@@ -10,17 +10,17 @@ COPY api .
 
 RUN CGO_ENABLED=0 go build -o api.bin .
 
-FROM node:24-alpine AS frontend
+FROM oven/bun:latest AS frontend
 
 WORKDIR /app
 
 COPY frontend/package*.json ./
 
-RUN npm install
+RUN bun i
 
 COPY frontend .
 
-RUN npm run build
+RUN bun run build
 
 FROM alpine:latest
 COPY --from=build /build/api.bin /app/api
