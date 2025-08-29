@@ -7,5 +7,3 @@ services:
     command: tunnel run
     env_file:
       - prod.env
-    ports:
-      - "8080:8080"
