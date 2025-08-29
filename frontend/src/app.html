@@ -3,6 +3,24 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
+
+		<!-- PWA Meta Tags -->
+		<meta name="theme-color" content="#4f46e5" />
+		<meta name="apple-mobile-web-app-capable" content="yes" />
+		<meta name="apple-mobile-web-app-status-bar-style" content="default" />
+		<meta name="apple-mobile-web-app-title" content="QuickFS" />
+		<meta name="description" content="Share files quickly and securely using peer-to-peer connections" />
+
+		<!-- Web App Manifest -->
+		<link rel="manifest" href="/manifest.json" />
+
+		<!-- Apple Touch Icons -->
+		<link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152x152.png" />
+		<link rel="apple-touch-icon" sizes="192x192" href="/icons/icon-192x192.png" />
+
+		<!-- Favicon -->
+		<link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+
 		%sveltekit.head%
 		<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 		<style>
@@ -43,5 +61,20 @@
 	</head>
 	<body data-sveltekit-preload-data="hover" class="transition-colors duration-500">
 		<div style="display: contents">%sveltekit.body%</div>
+
+		<!-- Service Worker Registration -->
+		<script>
+			if ('serviceWorker' in navigator) {
+				window.addEventListener('load', () => {
+					navigator.serviceWorker.register('/sw.js')
+						.then((registration) => {
+							console.log('SW registered: ', registration);
+						})
+						.catch((registrationError) => {
+							console.log('SW registration failed: ', registrationError);
+						});
+				});
+			}
+		</script>
 	</body>
 </html>
