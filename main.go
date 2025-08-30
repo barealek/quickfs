@@ -49,11 +49,6 @@ type JoinRequest struct {
 	PublicKey string `json:"public_key"`
 }
 
-type FileTransferRequest struct {
-	ReceiverID string      `json:"receiver_id"`
-	FileData   interface{} `json:"file_data"`
-}
-
 type WebRTCSignalingMessage struct {
 	Type       string      `json:"type"`
 	SenderID   string      `json:"sender_id,omitempty"`
@@ -160,11 +155,6 @@ func handleHostConnection(upload *Upload) {
 		}
 
 		switch msg.Type {
-		case "send_file":
-			var req FileTransferRequest
-			data, _ := json.Marshal(msg.Payload)
-			json.Unmarshal(data, &req)
-			handleFileTransfer(upload, req)
 		case "get_receivers":
 			sendReceiversUpdate(upload)
 		case "webrtc_offer":
@@ -300,37 +290,6 @@ func handleReceiverConnection(upload *Upload, conn *websocket.Conn) {
 	// Notify host about receiver leaving
 	sendReceiversUpdate(upload)
 	log.Printf("Receiver %s disconnected from upload %s", receiver.Name, upload.ID)
-}
-
-func handleFileTransfer(upload *Upload, req FileTransferRequest) {
-	upload.mutex.RLock()
-	var targetReceiver *Receiver
-	for _, receiver := range upload.Receivers {
-		if receiver.ID == req.ReceiverID {
-			targetReceiver = receiver
-			break
-		}
-	}
-	upload.mutex.RUnlock()
-
-	if targetReceiver == nil {
-		log.Printf("Receiver %s not found", req.ReceiverID)
-		return
-	}
-
-	// Send file to receiver
-	fileMsg := Message{
-		Type:    "file_data",
-		Payload: req.FileData,
-	}
-
-	err := targetReceiver.Conn.WriteJSON(fileMsg)
-	if err != nil {
-		log.Printf("Failed to send file to receiver %s: %v", targetReceiver.ID, err)
-		return
-	}
-
-	log.Printf("File sent to receiver %s (%s)", targetReceiver.Name, targetReceiver.ID)
 }
 
 func sendReceiversUpdate(upload *Upload) {

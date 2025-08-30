@@ -1,9 +1,25 @@
+// Global test function for debugging WebRTC
+window.testWebRTCMessage = function() {
+    if (wsService && wsService.ws) {
+        console.log('Testing WebRTC message send...');
+        wsService.send({
+            type: 'webrtc_test',
+            payload: {
+                test: 'hello from frontend'
+            }
+        });
+    } else {
+        console.log('No WebSocket service available');
+    }
+};
+
 // Global state
 let currentPage = 'upload';
 let currentFile = null;
 let uploadSession = null;
 let connectedReceivers = [];
 let ws = null;
+let webrtcManager = null;
 
 // Theme management
 function initTheme() {
@@ -39,6 +55,470 @@ function toggleTheme() {
         document.documentElement.classList.add('dark');
         document.body.classList.add('dark');
         localStorage.setItem('theme', 'dark');
+    }
+}
+
+// WebRTC Manager for peer-to-peer file transfer
+class WebRTCManager {
+    constructor() {
+        this.peerConnections = new Map(); // receiverId -> RTCPeerConnection
+        this.dataChannels = new Map(); // receiverId -> RTCDataChannel
+        this.connectionStates = new Map(); // receiverId -> 'connecting' | 'connected' | 'failed'
+        this.isHost = false;
+        this.wsService = null;
+        this.fileBuffer = new Map(); // receiverId -> { chunks: [], metadata: {} }
+
+        // WebRTC configuration with STUN servers
+        this.rtcConfig = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        // File transfer chunk size (16KB)
+        this.chunkSize = 16384;
+    }
+
+    setWebSocketService(wsService) {
+        this.wsService = wsService;
+    }
+
+    setIsHost(isHost) {
+        this.isHost = isHost;
+    }
+
+    // Host: Create offer for a new receiver
+    async createOffer(receiverId) {
+        console.log('Creating WebRTC offer for receiver:', receiverId);
+        try {
+            const peerConnection = new RTCPeerConnection(this.rtcConfig);
+            this.peerConnections.set(receiverId, peerConnection);
+
+            // Create data channel for file transfer
+            const dataChannel = peerConnection.createDataChannel('fileTransfer', {
+                ordered: true
+            });
+            this.dataChannels.set(receiverId, dataChannel);
+
+            console.log('Data channel created for receiver:', receiverId);
+            this.setupDataChannel(dataChannel, receiverId);
+            this.setupPeerConnectionEvents(peerConnection, receiverId);
+
+            // Create and send offer
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+
+            console.log('Sending WebRTC offer via WebSocket for receiver:', receiverId);
+            this.wsService.send({
+                type: 'webrtc_offer',
+                payload: {
+                    receiver_id: receiverId,
+                    offer: offer
+                }
+            });
+
+            console.log('WebRTC offer created and sent for receiver:', receiverId);
+        } catch (error) {
+            console.error('Failed to create WebRTC offer:', error);
+        }
+    }
+
+    // Receiver: Handle incoming offer
+    async handleOffer(senderId, offer) {
+        console.log('Handling WebRTC offer from sender:', senderId);
+        try {
+            const peerConnection = new RTCPeerConnection(this.rtcConfig);
+            this.peerConnections.set(senderId, peerConnection);
+
+            this.setupPeerConnectionEvents(peerConnection, senderId);
+
+            // Handle incoming data channel
+            peerConnection.ondatachannel = (event) => {
+                const dataChannel = event.channel;
+                console.log('Data channel received from host:', dataChannel);
+                this.dataChannels.set(senderId, dataChannel);
+                this.setupDataChannel(dataChannel, senderId);
+                console.log('Data channel received from host');
+            };
+
+            // Set remote description and create answer
+            await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+            const answer = await peerConnection.createAnswer();
+            await peerConnection.setLocalDescription(answer);
+
+            console.log('Sending WebRTC answer to host');
+            this.wsService.send({
+                type: 'webrtc_answer',
+                payload: {
+                    sender_id: senderId,
+                    answer: answer
+                }
+            });
+
+            console.log('WebRTC answer created and sent to host');
+        } catch (error) {
+            console.error('Failed to handle WebRTC offer:', error);
+        }
+    }
+
+    // Host: Handle incoming answer
+    async handleAnswer(receiverId, answer) {
+        console.log('Handling WebRTC answer from receiver:', receiverId);
+        try {
+            const peerConnection = this.peerConnections.get(receiverId);
+            if (peerConnection) {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                console.log('WebRTC answer processed for receiver:', receiverId);
+            } else {
+                console.error('No peer connection found for receiver:', receiverId);
+            }
+        } catch (error) {
+            console.error('Failed to handle WebRTC answer:', error);
+        }
+    }
+
+    // Handle ICE candidates
+    async handleIceCandidate(peerId, candidate) {
+        console.log('Handling ICE candidate for peer:', peerId, candidate);
+        try {
+            const peerConnection = this.peerConnections.get(peerId);
+            if (peerConnection) {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                console.log('ICE candidate added for peer:', peerId);
+            } else {
+                console.error('No peer connection found for peer:', peerId);
+            }
+        } catch (error) {
+            console.error('Failed to add ICE candidate:', error);
+        }
+    }
+
+    setupPeerConnectionEvents(peerConnection, peerId) {
+        console.log('Setting up peer connection events for:', peerId);
+
+        peerConnection.onicecandidate = (event) => {
+            if (event.candidate) {
+                console.log('Sending ICE candidate for peer:', peerId);
+                this.wsService.send({
+                    type: 'webrtc_ice_candidate',
+                    payload: {
+                        peer_id: peerId,
+                        candidate: event.candidate
+                    }
+                });
+            } else {
+                console.log('ICE gathering complete for peer:', peerId);
+            }
+        };
+
+        peerConnection.onconnectionstatechange = () => {
+            console.log(`WebRTC connection state for ${peerId}:`, peerConnection.connectionState);
+            if (peerConnection.connectionState === 'failed') {
+                this.closePeerConnection(peerId);
+            }
+        };
+
+        peerConnection.oniceconnectionstatechange = () => {
+            console.log(`ICE connection state for ${peerId}:`, peerConnection.iceConnectionState);
+        };
+    }
+
+    setupDataChannel(dataChannel, peerId) {
+        console.log('Setting up data channel for peer:', peerId);
+        this.connectionStates.set(peerId, 'connecting');
+
+        dataChannel.onopen = () => {
+            console.log(`Data channel opened for ${peerId}`);
+            this.connectionStates.set(peerId, 'connected');
+            this.updateReceiverConnectionStatus(peerId, 'connected');
+        };
+
+        dataChannel.onclose = () => {
+            console.log(`Data channel closed for ${peerId}`);
+            this.connectionStates.set(peerId, 'disconnected');
+            this.updateReceiverConnectionStatus(peerId, 'disconnected');
+        };
+
+        dataChannel.onerror = (error) => {
+            console.error(`Data channel error for ${peerId}:`, error);
+            this.connectionStates.set(peerId, 'failed');
+            this.updateReceiverConnectionStatus(peerId, 'failed');
+        };
+
+        dataChannel.onmessage = (event) => {
+            this.handleDataChannelMessage(event.data, peerId);
+        };
+    }
+
+    handleDataChannelMessage(data, senderId) {
+        try {
+            const message = JSON.parse(data);
+
+            switch (message.type) {
+                case 'file_start':
+                    this.fileBuffer.set(senderId, {
+                        chunks: [],
+                        metadata: message.metadata,
+                        totalChunks: message.totalChunks,
+                        receivedChunks: 0
+                    });
+                    console.log('File transfer started:', message.metadata.filename);
+                    this.updateTransferProgress(senderId, 0);
+                    break;
+
+                case 'file_chunk':
+                    this.handleFileChunk(senderId, message.chunkIndex, message.data);
+                    break;
+
+                case 'file_complete':
+                    this.assembleAndDownloadFile(senderId);
+                    break;
+            }
+        } catch (error) {
+            console.error('Failed to parse data channel message:', error);
+        }
+    }
+
+    handleFileChunk(senderId, chunkIndex, chunkData) {
+        const buffer = this.fileBuffer.get(senderId);
+        if (!buffer) return;
+
+        // Convert base64 back to binary data
+        const binaryData = Uint8Array.from(atob(chunkData), c => c.charCodeAt(0));
+        buffer.chunks[chunkIndex] = binaryData;
+        buffer.receivedChunks++;
+
+        // Update progress
+        const progress = (buffer.receivedChunks / buffer.totalChunks) * 100;
+        this.updateTransferProgress(senderId, progress);
+
+        console.log(`Received chunk ${chunkIndex + 1}/${buffer.totalChunks} (${progress.toFixed(1)}%)`);
+
+        // Check if all chunks received
+        if (buffer.receivedChunks === buffer.totalChunks) {
+            this.assembleAndDownloadFile(senderId);
+        }
+    }
+
+    assembleAndDownloadFile(senderId) {
+        const buffer = this.fileBuffer.get(senderId);
+        if (!buffer) return;
+
+        // Assemble file from chunks
+        const totalSize = buffer.chunks.reduce((size, chunk) => size + chunk.length, 0);
+        const fileData = new Uint8Array(totalSize);
+        let offset = 0;
+
+        for (const chunk of buffer.chunks) {
+            fileData.set(chunk, offset);
+            offset += chunk.length;
+        }
+
+        // Create blob and download
+        const blob = new Blob([fileData], { type: buffer.metadata.filetype });
+        this.downloadBlob(blob, buffer.metadata.filename);
+
+        // Clean up
+        this.fileBuffer.delete(senderId);
+        this.updateTransferProgress(senderId, 100);
+
+        console.log('File download completed:', buffer.metadata.filename);
+    }
+
+    downloadBlob(blob, filename) {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        // Show download success status
+        const waitingStatus = document.getElementById('waiting-status');
+        const downloadStatus = document.getElementById('download-status');
+        if (waitingStatus && downloadStatus) {
+            waitingStatus.classList.add('hidden');
+            downloadStatus.classList.remove('hidden');
+            downloadStatus.classList.add('flex');
+        }
+    }
+
+    updateTransferProgress(peerId, progress) {
+        // Update UI with transfer progress
+        const progressElement = document.getElementById(`progress-${peerId}`);
+        if (progressElement) {
+            progressElement.textContent = `${progress.toFixed(1)}%`;
+        }
+
+        // Update waiting status text for receivers
+        const waitingStatus = document.getElementById('waiting-status');
+        if (waitingStatus && progress > 0 && progress < 100) {
+            waitingStatus.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-orange-500"></div>
+                    <span>Modtager fil... ${progress.toFixed(1)}%</span>
+                </div>
+            `;
+        }
+    }
+
+    // Host: Send file to specific receiver via WebRTC
+    async sendFileToReceiver(receiverId, file) {
+        console.log('WebRTC sendFileToReceiver called for:', receiverId);
+        console.log('Available data channels:', Array.from(this.dataChannels.keys()));
+        console.log('Connection states:', Array.from(this.connectionStates.entries()));
+
+        const dataChannel = this.dataChannels.get(receiverId);
+        const connectionState = this.connectionStates.get(receiverId);
+
+        console.log('Data channel for receiver:', dataChannel);
+        console.log('Data channel ready state:', dataChannel ? dataChannel.readyState : 'no channel');
+        console.log('Connection state:', connectionState);
+
+        if (!dataChannel || dataChannel.readyState !== 'open' || connectionState !== 'connected') {
+            console.error('Data channel not ready for receiver:', receiverId, 'channel state:', dataChannel ? dataChannel.readyState : 'no channel', 'connection state:', connectionState);
+            return false;
+        }
+
+        try {
+            // Read file as array buffer
+            const arrayBuffer = await this.readFileAsArrayBuffer(file);
+            const fileData = new Uint8Array(arrayBuffer);
+
+            // Calculate chunks
+            const totalChunks = Math.ceil(fileData.length / this.chunkSize);
+
+            // Send file metadata
+            const metadata = {
+                filename: file.name,
+                filetype: file.type || 'application/octet-stream',
+                filesize: file.size
+            };
+
+            dataChannel.send(JSON.stringify({
+                type: 'file_start',
+                metadata: metadata,
+                totalChunks: totalChunks
+            }));
+
+            // Send file in chunks
+            for (let i = 0; i < totalChunks; i++) {
+                const start = i * this.chunkSize;
+                const end = Math.min(start + this.chunkSize, fileData.length);
+                const chunk = fileData.slice(start, end);
+
+                // Convert to base64 for JSON transmission
+                const chunkBase64 = btoa(String.fromCharCode(...chunk));
+
+                dataChannel.send(JSON.stringify({
+                    type: 'file_chunk',
+                    chunkIndex: i,
+                    data: chunkBase64
+                }));
+
+                // Update progress for host
+                const progress = ((i + 1) / totalChunks) * 100;
+                this.updateSendProgress(receiverId, progress);
+
+                // Small delay to prevent overwhelming the data channel
+                if (i % 10 === 0) {
+                    await new Promise(resolve => setTimeout(resolve, 1));
+                }
+            }
+
+            // Send completion signal
+            dataChannel.send(JSON.stringify({
+                type: 'file_complete'
+            }));
+
+            console.log('File sent successfully to receiver:', receiverId);
+            return true;
+        } catch (error) {
+            console.error('Failed to send file:', error);
+            return false;
+        }
+    }
+
+    updateSendProgress(receiverId, progress) {
+        const sendBtn = document.querySelector(`[data-receiver-id="${receiverId}"]`);
+        if (sendBtn) {
+            sendBtn.textContent = `Sender... ${progress.toFixed(1)}%`;
+            sendBtn.disabled = true;
+
+            if (progress >= 100) {
+                sendBtn.textContent = 'Sendt!';
+                setTimeout(() => {
+                    sendBtn.textContent = 'Send fil';
+                    sendBtn.disabled = false;
+                }, 2000);
+            }
+        }
+    }
+
+    readFileAsArrayBuffer(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = () => reject(reader.error);
+            reader.readAsArrayBuffer(file);
+        });
+    }
+
+    updateReceiverConnectionStatus(receiverId, status) {
+        // Update UI to show WebRTC connection status
+        const sendBtn = document.querySelector(`[data-receiver-id="${receiverId}"]`);
+        if (sendBtn) {
+            switch (status) {
+                case 'connecting':
+                    sendBtn.textContent = 'Tilslutter...';
+                    sendBtn.disabled = true;
+                    sendBtn.classList.remove('bg-green-500', 'hover:bg-green-600');
+                    sendBtn.classList.add('bg-yellow-500');
+                    break;
+                case 'connected':
+                    sendBtn.textContent = 'Send fil (WebRTC)';
+                    sendBtn.disabled = false;
+                    sendBtn.classList.remove('bg-yellow-500', 'bg-red-500');
+                    sendBtn.classList.add('bg-green-500', 'hover:bg-green-600');
+                    break;
+                case 'failed':
+                case 'disconnected':
+                    sendBtn.textContent = 'Send fil (WebSocket)';
+                    sendBtn.disabled = false;
+                    sendBtn.classList.remove('bg-yellow-500', 'bg-green-500', 'hover:bg-green-600');
+                    sendBtn.classList.add('bg-blue-500', 'hover:bg-blue-600');
+                    break;
+            }
+        }
+    }
+
+    closePeerConnection(peerId) {
+        const peerConnection = this.peerConnections.get(peerId);
+        if (peerConnection) {
+            peerConnection.close();
+            this.peerConnections.delete(peerId);
+        }
+
+        const dataChannel = this.dataChannels.get(peerId);
+        if (dataChannel) {
+            dataChannel.close();
+            this.dataChannels.delete(peerId);
+        }
+
+        this.fileBuffer.delete(peerId);
+        this.connectionStates.delete(peerId);
+        console.log('Peer connection closed for:', peerId);
+    }
+
+    closeAllConnections() {
+        for (const peerId of this.peerConnections.keys()) {
+            this.closePeerConnection(peerId);
+        }
+        console.log('All WebRTC connections closed');
     }
 }
 
@@ -114,7 +594,11 @@ class WebSocketService {
 
     send(message) {
         if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+            console.log('Sending WebSocket message:', message);
             this.ws.send(JSON.stringify(message));
+        } else {
+            console.error('WebSocket not ready, cannot send message:', message);
+            console.log('WebSocket state:', this.ws ? this.ws.readyState : 'no websocket');
         }
     }
 
@@ -125,27 +609,65 @@ class WebSocketService {
                 updateHostPage();
                 break;
             case 'receivers_update':
+                console.log('Received receivers update:', message.payload);
                 connectedReceivers = message.payload;
                 updateReceiversList();
+                // Create WebRTC offers for new receivers if we're the host
+                if (webrtcManager && webrtcManager.isHost) {
+                    console.log('Creating WebRTC offers for new receivers as host');
+                    console.log('Current peer connections:', Array.from(webrtcManager.peerConnections.keys()));
+
+                    // Add a small delay to ensure receiver is ready
+                    setTimeout(() => {
+                        message.payload.forEach(receiver => {
+                            console.log('Checking receiver:', receiver.id);
+                            if (!webrtcManager.peerConnections.has(receiver.id)) {
+                                console.log('Creating offer for new receiver:', receiver.id);
+                                webrtcManager.createOffer(receiver.id);
+                            } else {
+                                console.log('Peer connection already exists for receiver:', receiver.id);
+                            }
+                        });
+                    }, 500); // 500ms delay
+                } else {
+                    console.log('Not creating offers - webrtcManager:', !!webrtcManager, 'isHost:', webrtcManager ? webrtcManager.isHost : 'N/A');
+                }
                 break;
             case 'file_metadata':
                 showFileMetadata(message.payload);
                 break;
             case 'file_data':
+                // Legacy WebSocket file transfer - we'll phase this out
                 handleFileDownload(message.payload);
+                break;
+            // WebRTC signaling messages
+            case 'webrtc_offer':
+                console.log('Received WebRTC offer:', message.payload);
+                if (webrtcManager && !webrtcManager.isHost) {
+                    webrtcManager.handleOffer(message.payload.sender_id, message.payload.offer);
+                } else {
+                    console.log('Ignoring offer - not a receiver or no webrtcManager');
+                }
+                break;
+            case 'webrtc_answer':
+                console.log('Received WebRTC answer:', message.payload);
+                if (webrtcManager && webrtcManager.isHost) {
+                    webrtcManager.handleAnswer(message.payload.receiver_id, message.payload.answer);
+                } else {
+                    console.log('Ignoring answer - not a host or no webrtcManager');
+                }
+                break;
+            case 'webrtc_ice_candidate':
+                console.log('Received ICE candidate:', message.payload);
+                if (webrtcManager) {
+                    webrtcManager.handleIceCandidate(message.payload.peer_id, message.payload.candidate);
+                } else {
+                    console.log('Ignoring ICE candidate - no webrtcManager');
+                }
                 break;
         }
     }
 
-    sendFileToReceiver(receiverId, fileData) {
-        this.send({
-            type: 'send_file',
-            payload: {
-                receiver_id: receiverId,
-                file_data: fileData
-            }
-        });
-    }
 
     async createUploadSession(metadata) {
         const params = new URLSearchParams({
@@ -198,6 +720,10 @@ function handleFileSelect(file) {
     // Start upload session
     wsService.createUploadSession(metadata)
         .then(() => {
+            // Initialize WebRTC as host
+            webrtcManager = new WebRTCManager();
+            webrtcManager.setWebSocketService(wsService);
+            webrtcManager.setIsHost(true);
             showPage('host');
         })
         .catch((error) => {
@@ -211,6 +737,12 @@ function resetUploadState() {
     document.getElementById('loading-content').classList.add('hidden');
     currentFile = null;
     uploadSession = null;
+
+    // Close WebRTC connections
+    if (webrtcManager) {
+        webrtcManager.closeAllConnections();
+        webrtcManager = null;
+    }
 }
 
 // Host page functionality
@@ -248,21 +780,40 @@ function updateReceiversList() {
     if (connectedReceivers.length === 0) {
         receiversList.innerHTML = '<p class="text-sm text-gray-500 dark:text-gray-400">Ingen tilsluttede endnu...</p>';
     } else {
-        receiversList.innerHTML = connectedReceivers.map(receiver => `
-            <div class="flex items-center justify-between p-3 glass-light rounded-lg">
-                <div class="flex-1">
-                    <span class="text-sm font-medium text-gray-900 dark:text-white">${receiver.name}</span>
-                    <p class="text-xs text-gray-500 dark:text-gray-400">Tilsluttet</p>
+        receiversList.innerHTML = connectedReceivers.map(receiver => {
+            // Check WebRTC connection status
+            const connectionState = webrtcManager ? webrtcManager.connectionStates.get(receiver.id) : null;
+            let buttonClass = 'bg-yellow-500'; // Default to connecting
+            let buttonText = 'Tilslutter...';
+            let buttonDisabled = true;
+
+            if (connectionState === 'connected') {
+                buttonClass = 'bg-green-500 hover:bg-green-600';
+                buttonText = 'Send fil (WebRTC)';
+                buttonDisabled = false;
+            } else if (connectionState === 'failed' || connectionState === 'disconnected') {
+                buttonClass = 'bg-blue-500 hover:bg-blue-600';
+                buttonText = 'Send fil (WebSocket)';
+                buttonDisabled = false;
+            }
+
+            return `
+                <div class="flex items-center justify-between p-3 glass-light rounded-lg">
+                    <div class="flex-1">
+                        <span class="text-sm font-medium text-gray-900 dark:text-white">${receiver.name}</span>
+                        <p class="text-xs text-gray-500 dark:text-gray-400">Tilsluttet</p>
+                    </div>
+                    <button
+                        onclick="sendFileToReceiver(${JSON.stringify(receiver).replace(/"/g, '&quot;')})"
+                        data-receiver-id="${receiver.id}"
+                        class="px-3 py-1 text-xs font-medium text-white ${buttonClass} rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm"
+                        ${buttonDisabled ? 'disabled' : ''}
+                    >
+                        ${buttonText}
+                    </button>
                 </div>
-                <button
-                    onclick="sendFileToReceiver(${JSON.stringify(receiver).replace(/"/g, '&quot;')})"
-                    data-receiver-id="${receiver.id}"
-                    class="px-3 py-1 text-xs font-medium text-white bg-green-500 hover:bg-green-600 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed backdrop-blur-sm"
-                >
-                    Send fil
-                </button>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     }
 
     // Enable send button if there are receivers
@@ -294,6 +845,10 @@ function joinUpload() {
     // Connect to WebSocket
     wsService.connect(`/api/join/${window.currentUploadId}`)
         .then(() => {
+            // Initialize WebRTC as receiver
+            webrtcManager = new WebRTCManager();
+            webrtcManager.setWebSocketService(wsService);
+            webrtcManager.setIsHost(false);
             wsService.joinUpload(userName, publicKey);
         })
         .catch((error) => {
@@ -393,9 +948,31 @@ function sendFileToReceiver(receiver) {
         return;
     }
 
-    console.log('Sending file to receiver:', receiver.name);
+    console.log('Sending file to receiver via WebRTC:', receiver.name);
 
-    // Read the file based on its type
+    // Use WebRTC if available, fallback to WebSocket
+    if (webrtcManager && webrtcManager.isHost) {
+        webrtcManager.sendFileToReceiver(receiver.id, currentFile)
+            .then(success => {
+                if (!success) {
+                    console.warn('WebRTC transfer failed, falling back to WebSocket');
+                    sendFileViaWebSocket(receiver);
+                }
+            })
+            .catch(error => {
+                console.error('WebRTC transfer error, falling back to WebSocket:', error);
+                sendFileViaWebSocket(receiver);
+            });
+    } else {
+        // Fallback to WebSocket transfer
+        sendFileViaWebSocket(receiver);
+    }
+}
+
+// Legacy WebSocket file transfer (fallback)
+function sendFileViaWebSocket(receiver) {
+    console.log('Sending file via WebSocket to receiver:', receiver.name);
+
     const reader = new FileReader();
 
     reader.onload = (e) => {
@@ -482,6 +1059,10 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('copy-btn').addEventListener('click', copyToClipboard);
     document.getElementById('back-btn').addEventListener('click', () => {
         wsService.close();
+        if (webrtcManager) {
+            webrtcManager.closeAllConnections();
+            webrtcManager = null;
+        }
         resetUploadState();
         showPage('upload');
     });
@@ -504,6 +1085,10 @@ document.addEventListener('DOMContentLoaded', function() {
     });
     document.getElementById('join-back-btn').addEventListener('click', () => {
         wsService.close();
+        if (webrtcManager) {
+            webrtcManager.closeAllConnections();
+            webrtcManager = null;
+        }
         showPage('upload');
         // Clear URL parameters
         window.history.replaceState({}, document.title, '/');
