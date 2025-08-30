@@ -54,6 +54,16 @@ type FileTransferRequest struct {
 	FileData   interface{} `json:"file_data"`
 }
 
+type WebRTCSignalingMessage struct {
+	Type       string      `json:"type"`
+	SenderID   string      `json:"sender_id,omitempty"`
+	ReceiverID string      `json:"receiver_id,omitempty"`
+	PeerID     string      `json:"peer_id,omitempty"`
+	Offer      interface{} `json:"offer,omitempty"`
+	Answer     interface{} `json:"answer,omitempty"`
+	Candidate  interface{} `json:"candidate,omitempty"`
+}
+
 var uploads = make(map[string]*Upload) // ID:*Upload
 var uploadsMutex sync.RWMutex
 
