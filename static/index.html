@@ -21,7 +21,7 @@
     <style>
         /* Background styles */
         body {
-            background-image: url('/static/bg-light.jpg');
+            background-image: url('/static/bg-light.webp');
             background-position: center;
             background-size: cover;
             background-attachment: fixed;
@@ -29,13 +29,13 @@
         }
 
         body.dark {
-            background-image: url('/static/bg-dark.jpg');
+            background-image: url('/static/bg-dark.webp');
         }
 
         /* Auto detect system theme for background */
         @media (prefers-color-scheme: dark) {
             body:not(.dark):not(.light) {
-                background-image: url('/static/bg-dark.jpg');
+                background-image: url('/static/bg-dark.webp');
             }
         }
 

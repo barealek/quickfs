@@ -1,0 +1,5 @@
+root = "."
+tmp_dir = "tmp"
+
+[build]
+args_bin = ["--static", "static"]

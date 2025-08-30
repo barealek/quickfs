@@ -1,29 +1,22 @@
-FROM golang:1.24-alpine AS build
+FROM golang:1.25-alpine AS build
 
 WORKDIR /build
 
-COPY api/go.* .
+COPY go.* .
 
 RUN go mod download -x
 
-COPY api .
+COPY . .
 
-RUN CGO_ENABLED=0 go build -o api.bin .
+RUN CGO_ENABLED=0 go build -o api.bin -ldflags "-s -w" .
 
-FROM oven/bun:latest AS frontend
-
+FROM gcr.io/distroless/static-debian12
 WORKDIR /app
 
-COPY frontend/package*.json ./
-
-RUN bun i
-
-COPY frontend .
-
-RUN bun run build
-
-FROM alpine:latest
 COPY --from=build /build/api.bin /app/api
-COPY --from=frontend /app/build /app/dist
+COPY static /app/dist
 
-ENTRYPOINT [ "/app/api" ]
+RUN ls -lah /app/dist
+RUN ls -lah /app
+
+ENTRYPOINT [ "/app/api", "--static", "./dist" ]
