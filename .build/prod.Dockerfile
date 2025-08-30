@@ -14,6 +14,6 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o api.arm64 -ldflags "-s -w"
 FROM gcr.io/distroless/static-debian12
 WORKDIR /app
 
-COPY --from=build /build/api.amd64 /app/amd64
-COPY --from=build /build/api.arm64 /app/arm64
+COPY build/api.amd64 /app/amd64
+COPY build/api.arm64 /app/arm64
 COPY static /app/dist
