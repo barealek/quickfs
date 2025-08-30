@@ -261,6 +261,30 @@ func handleReceiverConnection(upload *Upload, conn *websocket.Conn) {
 			log.Printf("Receiver connection error: %v", err)
 			break
 		}
+
+		log.Printf("Received message from receiver %s: type=%s", receiver.Name, receiverMsg.Type)
+
+		// Handle WebRTC signaling messages from receiver
+		switch receiverMsg.Type {
+		case "webrtc_answer":
+			log.Printf("Received WebRTC answer from receiver")
+			// Add receiver ID to the message payload
+			if payload, ok := receiverMsg.Payload.(map[string]interface{}); ok {
+				payload["sender_id"] = receiver.ID
+				receiverMsg.Payload = payload
+			}
+			handleWebRTCSignaling(upload, receiverMsg, false)
+		case "webrtc_ice_candidate":
+			log.Printf("Received WebRTC ICE candidate from receiver")
+			// Add receiver ID to the message payload
+			if payload, ok := receiverMsg.Payload.(map[string]interface{}); ok {
+				payload["peer_id"] = receiver.ID
+				receiverMsg.Payload = payload
+			}
+			handleWebRTCSignaling(upload, receiverMsg, false)
+		default:
+			log.Printf("Unknown message type from receiver %s: %s", receiver.Name, receiverMsg.Type)
+		}
 	}
 
 	// Remove receiver when disconnected
@@ -332,6 +356,104 @@ func sendReceiversUpdate(upload *Upload) {
 	}
 
 	upload.Host.WriteJSON(msg)
+}
+
+func handleWebRTCSignaling(upload *Upload, msg Message, isFromHost bool) {
+	log.Printf("Handling WebRTC signaling: type=%s, isFromHost=%t", msg.Type, isFromHost)
+
+	var signalingMsg WebRTCSignalingMessage
+	data, _ := json.Marshal(msg.Payload)
+	json.Unmarshal(data, &signalingMsg)
+
+	log.Printf("Signaling message content: %+v", signalingMsg)
+
+	switch msg.Type {
+	case "webrtc_offer":
+		// Forward offer from host to receiver
+		if isFromHost {
+			log.Printf("Processing WebRTC offer from host for receiver: %s", signalingMsg.ReceiverID)
+			upload.mutex.RLock()
+			var targetReceiver *Receiver
+			for _, receiver := range upload.Receivers {
+				log.Printf("Checking receiver: %s against target: %s", receiver.ID, signalingMsg.ReceiverID)
+				if receiver.ID == signalingMsg.ReceiverID {
+					targetReceiver = receiver
+					break
+				}
+			}
+			upload.mutex.RUnlock()
+
+			if targetReceiver != nil {
+				offerMsg := Message{
+					Type: "webrtc_offer",
+					Payload: map[string]interface{}{
+						"sender_id": "host",
+						"offer":     signalingMsg.Offer,
+					},
+				}
+				err := targetReceiver.Conn.WriteJSON(offerMsg)
+				if err != nil {
+					log.Printf("Failed to send WebRTC offer to receiver %s: %v", targetReceiver.Name, err)
+				} else {
+					log.Printf("Forwarded WebRTC offer to receiver %s", targetReceiver.Name)
+				}
+			} else {
+				log.Printf("Target receiver %s not found", signalingMsg.ReceiverID)
+			}
+		}
+
+	case "webrtc_answer":
+		// Forward answer from receiver to host
+		if !isFromHost {
+			answerMsg := Message{
+				Type: "webrtc_answer",
+				Payload: map[string]interface{}{
+					"receiver_id": signalingMsg.SenderID,
+					"answer":      signalingMsg.Answer,
+				},
+			}
+			upload.Host.WriteJSON(answerMsg)
+			log.Printf("Forwarded WebRTC answer from receiver to host")
+		}
+
+	case "webrtc_ice_candidate":
+		// Forward ICE candidates between host and receiver
+		if isFromHost {
+			// From host to receiver
+			upload.mutex.RLock()
+			var targetReceiver *Receiver
+			for _, receiver := range upload.Receivers {
+				if receiver.ID == signalingMsg.PeerID {
+					targetReceiver = receiver
+					break
+				}
+			}
+			upload.mutex.RUnlock()
+
+			if targetReceiver != nil {
+				candidateMsg := Message{
+					Type: "webrtc_ice_candidate",
+					Payload: map[string]interface{}{
+						"peer_id":   "host",
+						"candidate": signalingMsg.Candidate,
+					},
+				}
+				targetReceiver.Conn.WriteJSON(candidateMsg)
+				log.Printf("Forwarded ICE candidate to receiver %s", targetReceiver.Name)
+			}
+		} else {
+			// From receiver to host
+			candidateMsg := Message{
+				Type: "webrtc_ice_candidate",
+				Payload: map[string]interface{}{
+					"peer_id":   signalingMsg.PeerID,
+					"candidate": signalingMsg.Candidate,
+				},
+			}
+			upload.Host.WriteJSON(candidateMsg)
+			log.Printf("Forwarded ICE candidate from receiver to host")
+		}
+	}
 }
 
 func main() {
