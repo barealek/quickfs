@@ -1,6 +1,6 @@
 services:
   app:
-    image: ghcr.io/barealek/quickfs:0.1.16
+    image: ghcr.io/barealek/quickfs:0.1.17
     command: "/app/api --static /app/dist"
 
   tunnel:

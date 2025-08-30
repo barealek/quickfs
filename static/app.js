@@ -247,17 +247,19 @@ function updateHostPage() {
     const shareUrl = `${window.location.origin}/join?uploadid=${uploadSession.id}`;
     document.getElementById('share-url').value = shareUrl;
 
-    // Generate QR code (simplified placeholder)
+    // Generate QR code
     updateQRCode(shareUrl);
 }
 
 function updateQRCode(url) {
-    const qrCode = document.getElementById('qr-code');
-    qrCode.innerHTML = `
-        <div class="w-24 h-24 bg-white/90 dark:bg-gray-800/90 rounded-lg flex items-center justify-center">
-            <span class="text-xs text-gray-600 dark:text-gray-400">QR: ${url.substr(-6)}</span>
-        </div>
-    `;
+    var qrcode = new QRCode(document.getElementById("qr-code"), {
+        text: url,
+        width: 128,
+        height: 128,
+        colorDark : "#000000",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+    });
 }
 
 function updateReceiversList() {

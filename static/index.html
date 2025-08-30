@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>QuickFS - Quick File Share</title>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -17,6 +19,7 @@
             }
         }
     </script>
+
     <link href="https://fonts.googleapis.com/css2?family=Mulish:ital,wght@0,200..1000;1,200..1000&display=swap" rel="stylesheet">
     <style>
         /* Background styles */
@@ -185,7 +188,6 @@
                             <h3 class="text-sm font-medium text-gray-900 dark:text-white mb-3">QR Kode</h3>
                             <div class="p-3 bg-white/90 dark:bg-gray-800/90 rounded-xl shadow-sm">
                                 <div id="qr-code" class="w-24 h-24 bg-white/90 dark:bg-gray-800/90 rounded-lg flex items-center justify-center">
-                                    <span class="text-xs text-gray-600 dark:text-gray-400">QR Code</span>
                                 </div>
                             </div>
                         </div>
