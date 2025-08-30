@@ -16,7 +16,4 @@ WORKDIR /app
 COPY --from=build /build/api.bin /app/api
 COPY static /app/dist
 
-RUN ls -lah /app/dist
-RUN ls -lah /app
-
 ENTRYPOINT [ "/app/api", "--static", "./dist" ]
