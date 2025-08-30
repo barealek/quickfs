@@ -1,7 +1,7 @@
 services:
   app:
-    image: ghcr.io/barealek/quickfs:0.1.15
-    command: "/app/arm64 --static /app/dist"
+    image: ghcr.io/barealek/quickfs:0.1.16
+    command: "/app/api --static /app/dist"
 
   tunnel:
     image: cloudflare/cloudflared:latest
