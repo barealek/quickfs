@@ -35,7 +35,8 @@ jobs:
 
       - name: Build go code
         run: |
-          docker run --rm -v ${{ github.workspace }}:/app -w /app golang:1.25-alpine sh -c "go build -o api.amd64 -ldflags '-s -w' . && go build -o api.arm64 -ldflags '-s -w' ."
+          mkdir -p build
+          docker run --rm -v ${{ github.workspace }}:/app -w /app golang:1.25-alpine sh -c "GOOS=linux GOARCH=amd64 go build -o build/api.amd64 -ldflags '-s -w' . && GOOS=linux GOARCH=arm64 go build -o build/api.arm64 -ldflags '-s -w' ."
 
       - name: Build and push image
         uses: docker/build-push-action@v6
