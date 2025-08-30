@@ -167,6 +167,17 @@ func handleHostConnection(upload *Upload) {
 			handleFileTransfer(upload, req)
 		case "get_receivers":
 			sendReceiversUpdate(upload)
+		case "webrtc_offer":
+			log.Printf("Received WebRTC offer from host")
+			handleWebRTCSignaling(upload, msg, true)
+		case "webrtc_answer":
+			log.Printf("Received WebRTC answer from host")
+			handleWebRTCSignaling(upload, msg, true)
+		case "webrtc_ice_candidate":
+			log.Printf("Received WebRTC ICE candidate from host")
+			handleWebRTCSignaling(upload, msg, true)
+		default:
+			log.Printf("Unknown message type from host: %s", msg.Type)
 		}
 	}
 }
